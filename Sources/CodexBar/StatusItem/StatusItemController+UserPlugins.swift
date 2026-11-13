@@ -385,7 +385,10 @@ struct UserPluginMenuCardView: View {
         let resets = [snapshot?.primary, snapshot?.secondary, snapshot?.tertiary].map { window in
             window.flatMap { UsageFormatter.resetLine(for: $0, style: resetStyle, now: now) } ?? ""
         }
-        return ([
+        let staleMessage = error == nil ? "" : (snapshot.map {
+            LastKnownUsagePresentation.message(capturedAt: $0.updatedAt, now: now)
+        } ?? "")
+        let parts: [String] = [
             codexBarLocalizationSignature(),
             snapshot?.updatedAt.timeIntervalSinceReferenceDate.description ?? "none",
             String(snapshot?.details.count ?? 0),
@@ -393,10 +396,9 @@ struct UserPluginMenuCardView: View {
             snapshot?.secondary?.title ?? "",
             snapshot?.tertiary?.title ?? "",
             error ?? "",
-            error == nil ? "" : snapshot.map {
-                LastKnownUsagePresentation.message(capturedAt: $0.updatedAt, now: now)
-            } ?? "",
-        ] + resets).joined(separator: "|")
+            staleMessage,
+        ]
+        return (parts + resets).joined(separator: "|")
     }
 }
 #endif
