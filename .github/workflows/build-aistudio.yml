@@ -1,4 +1,5 @@
 name: Build CodexBar (AI Studio)
+# Build CodexBar with native Google AI Studio provider
 
 on:
   workflow_dispatch:
