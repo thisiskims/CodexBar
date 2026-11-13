@@ -41,7 +41,10 @@ public enum AIStudioProviderDescriptor {
                 noDataMessage: { "No cost history data." }),
             fetchPlan: ProviderFetchPlan(
                 sourceModes: [.auto, .api],
-                pipeline: ProviderFetchPipeline(resolveStrategies: self.resolveStrategies)))
+                pipeline: ProviderFetchPipeline(resolveStrategies: self.resolveStrategies)),
+            cli: ProviderCLIConfig(
+                name: "aistudio",
+                versionDetector: nil))
     }
 
     private static func resolveStrategies(context: ProviderFetchContext) async -> [any ProviderFetchStrategy] {
