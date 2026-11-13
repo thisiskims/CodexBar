@@ -1,0 +1,40 @@
+name: Build CodexBar (AI Studio)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [aistudio-build]
+
+jobs:
+  build-macos:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          XCODE_APP=$(ls -d /Applications/Xcode_*.app /Applications/Xcode.app 2>/dev/null | sort -V | tail -n 1 || true)
+          if [[ -n "$XCODE_APP" ]]; then
+            sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          fi
+          xcodebuild -version
+          swift --version
+
+      - name: Package CodexBar.app (adhoc)
+        env:
+          CODEXBAR_SIGNING: adhoc
+        run: |
+          chmod +x Scripts/package_app.sh
+          ./Scripts/package_app.sh release
+
+      - name: Archive CodexBar.app
+        run: |
+          ditto -c -k --keepParent CodexBar.app CodexBar-AIStudio-arm64.zip
+
+      - name: Upload CodexBar.app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodexBar-AIStudio-arm64
+          path: CodexBar-AIStudio-arm64.zip
+          retention-days: 7
