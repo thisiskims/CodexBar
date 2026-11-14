@@ -1063,7 +1063,12 @@ final class MenuBarLayoutRenderer {
                 showUsed: options.showUsed,
                 attributes: attributes)
         case let .extraPercent(id):
-            self.extraPercentToken(id, data: data, showUsed: options.showUsed, attributes: attributes)
+            self.extraPercentToken(
+                id,
+                data: data,
+                showUsed: options.showUsed,
+                showWindowLabels: options.showWindowLabels,
+                attributes: attributes)
         case .spendAmount, .spendBudget:
             self.optionalTextToken(
                 item == .spendBudget ? data.spendBudget : data.spendAmount,
@@ -1109,6 +1114,7 @@ final class MenuBarLayoutRenderer {
         _ id: String,
         data: MenuBarLayoutRenderData,
         showUsed: Bool,
+        showWindowLabels: Bool,
         attributes: [NSAttributedString.Key: Any])
         -> (value: NSAttributedString, accessibilityText: String?)
     {
@@ -1123,8 +1129,11 @@ final class MenuBarLayoutRenderer {
             ? L("%@ %@", title, resolvedValue.text)
             : L("%@ unavailable", title)
         let shortLabel = data.descriptor?.menuBarMetrics.namedExtraShortLabels[id]
+        let text = showWindowLabels
+            ? L("%@ %@", shortLabel ?? title, resolvedValue.text)
+            : resolvedValue.text
         return self.textToken(
-            L("%@ %@", shortLabel ?? title, resolvedValue.text),
+            text,
             accessibilityText: accessibility,
             attributes: attributes)
     }
