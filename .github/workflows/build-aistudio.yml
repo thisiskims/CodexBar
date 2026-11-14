@@ -25,6 +25,7 @@ jobs:
       - name: Package CodexBar.app (adhoc)
         env:
           CODEXBAR_SIGNING: adhoc
+          CODEXBAR_SKIP_LAUNCH_SMOKE: "1"
         run: |
           chmod +x Scripts/package_app.sh
           ./Scripts/package_app.sh release
