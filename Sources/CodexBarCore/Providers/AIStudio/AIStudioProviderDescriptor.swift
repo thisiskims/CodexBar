@@ -9,7 +9,7 @@ public enum AIStudioProviderDescriptor {
             menuBarMetrics: ProviderMenuBarMetricCapabilities(supported: [.automatic]),
             metadata: ProviderMetadata(
                 id: .aistudio,
-                displayName: "Google AI Studio",
+                displayName: "AI Studio",
                 shortDisplayName: "AI Studio",
                 sessionLabel: "GCP Credits",
                 weeklyLabel: "GCP Credits",
@@ -160,7 +160,7 @@ struct AIStudioCreditsFetchStrategy: ProviderFetchStrategy {
             } ?? "Grant"
             let val = "\(fmt(grant.available)) / \(fmt(grant.total))"
             let progress: ProviderDetailSection.Row.Progress? = grant.total > 0
-                ? .makeProgress(used: grant.used, total: grant.total)
+                ? .makeProgress(used: grant.available, total: grant.total)
                 : nil
             rows.append(ProviderDetailSection.makeRow(label: label, value: val, progress: progress))
         }
