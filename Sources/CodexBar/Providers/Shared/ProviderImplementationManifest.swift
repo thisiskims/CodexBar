@@ -119,5 +119,6 @@ enum ProviderImplementationManifest {
         SiliconFlowProviderImplementation(),
         PluginAPIKeyProviderImplementation(spec: TripoProviderDescriptor.spec),
         AIStudioProviderImplementation(),
+        ColabProviderImplementation(),
     ]
 }

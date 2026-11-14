@@ -119,5 +119,6 @@ public enum ProviderManifest {
         SiliconFlowProviderDescriptor.descriptor,
         TripoProviderDescriptor.descriptor,
         AIStudioProviderDescriptor.descriptor,
+        ColabProviderDescriptor.descriptor,
     ]
 }
