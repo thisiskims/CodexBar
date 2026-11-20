@@ -1025,6 +1025,23 @@ extension UsageMenuCardView.Model {
             } else {
                 nil
             }
+            let warningWindow: QuotaWarningWindow? = if usageKnown, input.provider == .antigravity {
+                switch namedWindow.window.windowMinutes {
+                case 300:
+                    .session
+                case 10080:
+                    .weekly
+                default:
+                    nil
+                }
+            } else {
+                nil
+            }
+            let warningMarkerPercents = warningWindow.map {
+                Self.warningMarkerPercents(
+                    thresholds: input.quotaWarningThresholds[$0],
+                    showUsed: input.usageBarsShowUsed)
+            } ?? []
             var metric = Metric(
                 id: namedWindow.id,
                 title: title,
@@ -1041,6 +1058,7 @@ extension UsageMenuCardView.Model {
                 pacePercent: usageKnown ? paceDetail?.pacePercent : nil,
                 detailIsPaceDerived: paceDetail?.isPaceDerived ?? false,
                 paceOnTop: paceDetail?.paceOnTop ?? true,
+                warningMarkerPercents: warningMarkerPercents,
                 sessionEquivalentDetail: usageKnown
                     ? Self.sessionEquivalentDetail(
                         input: input,
