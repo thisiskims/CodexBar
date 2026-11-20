@@ -48,6 +48,7 @@ public enum GeminiProviderDescriptor {
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "Gemini cost summary is not supported." }),
+            pace: ProviderPaceCapability(sessionPaceWindowRule: .windowDuration(minutes: 300)),
             presentation: ProviderUsagePresentation(
                 rateWindowLabeler: { metadata, snapshot, _ in
                     let isWeb = snapshot.primary?.windowMinutes == 300 || snapshot.secondary?.windowMinutes == 10080

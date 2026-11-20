@@ -95,6 +95,26 @@ struct GeminiWebSourceTests {
         #expect(MenuBarPercentWindowPreference.weekly.label(for: .gemini) == "Flash")
     }
 
+    @Test
+    func `five-hour web window supports session pace while daily CLI windows do not`() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let fiveHourWindow = RateWindow(
+            usedPercent: 12,
+            windowMinutes: 300,
+            resetsAt: now.addingTimeInterval(50 * 60),
+            resetDescription: nil)
+        let dailyWindow = RateWindow(
+            usedPercent: 12,
+            windowMinutes: 1440,
+            resetsAt: now.addingTimeInterval(4 * 3600),
+            resetDescription: nil)
+
+        let detail = try #require(UsagePaceText.sessionDetail(provider: .gemini, window: fiveHourWindow, now: now))
+        #expect(detail.leftLabel.contains("in reserve"))
+        #expect(detail.rightLabel == "Lasts until reset")
+        #expect(UsagePaceText.sessionDetail(provider: .gemini, window: dailyWindow, now: now) == nil)
+    }
+
     private func context(source: ProviderSourceMode) -> ProviderFetchContext {
         let base = ProviderCutoverTestSupport.context()
         return ProviderFetchContext(
