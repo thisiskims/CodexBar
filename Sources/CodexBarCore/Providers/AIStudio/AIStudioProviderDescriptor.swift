@@ -39,6 +39,7 @@ public enum AIStudioProviderDescriptor {
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "No cost history data." }),
+            pace: .calendarMonthResetWindow,
             fetchPlan: ProviderFetchPlan(
                 sourceModes: [.auto, .api],
                 pipeline: ProviderFetchPipeline(resolveStrategies: self.resolveStrategies)),
@@ -78,6 +79,7 @@ private struct AIStudioBridgeResponse: Decodable {
     let totalUsed: Double
     let totalAvailable: Double
     let soonestExpiryUnix: Double?
+    let nextResetUnix: Double?
     let grants: [AIStudioBridgeGrant]
 
     enum CodingKeys: String, CodingKey {
@@ -88,6 +90,7 @@ private struct AIStudioBridgeResponse: Decodable {
         case totalUsed = "total_used"
         case totalAvailable = "total_available"
         case soonestExpiryUnix = "soonest_expiry_unix"
+        case nextResetUnix = "next_reset_unix"
     }
 }
 
@@ -120,14 +123,15 @@ struct AIStudioCreditsFetchStrategy: ProviderFetchStrategy {
         let payload = try JSONDecoder().decode(AIStudioBridgeResponse.self, from: data)
         let now = Date()
         let soonestExpiry = payload.soonestExpiryUnix.map { Date(timeIntervalSince1970: $0) }
+        let nextReset = payload.nextResetUnix.map { Date(timeIntervalSince1970: $0) } ?? soonestExpiry
         let usedPct = payload.totalGrant > 0
             ? max(0, min(100, (payload.totalUsed / payload.totalGrant) * 100))
             : 0
 
         let primary = RateWindow(
             usedPercent: usedPct,
-            windowMinutes: nil,
-            resetsAt: soonestExpiry,
+            windowMinutes: nextReset != nil ? ProviderPaceCapability.monthlyWindowSentinelMinutes : nil,
+            resetsAt: nextReset,
             resetDescription: nil)
 
         let cost = ProviderCostSnapshot(

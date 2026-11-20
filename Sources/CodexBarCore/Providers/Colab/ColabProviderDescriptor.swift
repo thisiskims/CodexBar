@@ -39,6 +39,7 @@ public enum ColabProviderDescriptor {
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "No cost history data." }),
+            pace: .calendarMonthResetWindow,
             fetchPlan: ProviderFetchPlan(
                 sourceModes: [.auto, .api],
                 pipeline: ProviderFetchPipeline(resolveStrategies: self.resolveStrategies)),
@@ -64,6 +65,7 @@ private struct ColabBridgeResponse: Decodable {
     let assignmentsCount: Int
     let eligibleGpus: [String]
     let eligibleTpus: [String]
+    let nextResetUnix: Double?
 
     enum CodingKeys: String, CodingKey {
         case currentBalance = "current_balance"
@@ -72,6 +74,7 @@ private struct ColabBridgeResponse: Decodable {
         case assignmentsCount = "assignments_count"
         case eligibleGpus = "eligible_gpus"
         case eligibleTpus = "eligible_tpus"
+        case nextResetUnix = "next_reset_unix"
     }
 }
 
@@ -107,10 +110,12 @@ struct ColabUsageFetchStrategy: ProviderFetchStrategy {
         let usedUnits = max(0, maxUnits - payload.currentBalance)
         let usedPct = max(0, min(100, (usedUnits / maxUnits) * 100))
 
+        let nextReset = payload.nextResetUnix.map { Date(timeIntervalSince1970: $0) }
+
         let primary = RateWindow(
             usedPercent: usedPct,
-            windowMinutes: nil,
-            resetsAt: nil,
+            windowMinutes: nextReset != nil ? ProviderPaceCapability.monthlyWindowSentinelMinutes : nil,
+            resetsAt: nextReset,
             resetDescription: nil)
 
         var rows: [ProviderDetailSection.Row] = [
