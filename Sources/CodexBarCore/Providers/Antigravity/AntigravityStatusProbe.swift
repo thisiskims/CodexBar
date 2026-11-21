@@ -1155,7 +1155,8 @@ public struct AntigravityStatusProbe: Sendable {
 
     static func processInfos(
         fromEntries entries: [ProcessEntry],
-        scope: ProcessScope = .ideAndCLI) throws -> [ProcessInfoResult]
+        scope: ProcessScope = .ideAndCLI,
+        daemonDirectory: URL = Self.defaultDaemonDirectory) throws -> [ProcessInfoResult]
     {
         var sawTokenlessIDE = false
         var results: [ProcessInfoResult] = []
@@ -1163,11 +1164,14 @@ public struct AntigravityStatusProbe: Sendable {
             guard let kind = Self.antigravityProcessKind(entry.command) else { continue }
             if !Self.processKind(kind, matches: scope) { continue }
             // The IDE language server authenticates local requests with a
-            // `--csrf_token` and must keep requiring it: skip a tokenless IDE
-            // or app match so a later valid server can still be found (and surface
-            // `missingCSRFToken` if none is). The CLI's language server exposes
-            // no token flag and needs none, so an empty token is allowed there.
-            guard let token = Self.resolvedCSRFToken(forKind: kind, command: entry.command) else {
+            // `--csrf_token` flag or a matching `~/.gemini/antigravity/daemon/hub_*.json`
+            // entry (Antigravity 2.34+): skip a tokenless IDE or app match so a
+            // later valid server can still be found (and surface `missingCSRFToken`
+            // if none is). The CLI's language server exposes no token flag and
+            // needs none, so an empty token is allowed there.
+            guard let token = Self.resolvedCSRFToken(forKind: kind, command: entry.command)
+                ?? Self.daemonCSRFToken(forKind: kind, pid: entry.pid, daemonDirectory: daemonDirectory)
+            else {
                 sawTokenlessIDE = true
                 continue
             }
@@ -1255,6 +1259,41 @@ public struct AntigravityStatusProbe: Sendable {
         case .app, .ide: return nil
         case .cli: return ""
         }
+    }
+
+    private struct DaemonHubInfo: Decodable {
+        let pid: Int
+        let csrfToken: String?
+    }
+
+    static var defaultDaemonDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".gemini/antigravity/daemon", isDirectory: true)
+    }
+
+    static func daemonCSRFToken(
+        forKind kind: AntigravityProcessKind,
+        pid: Int,
+        daemonDirectory: URL = Self.defaultDaemonDirectory) -> String?
+    {
+        guard kind == .app || kind == .ide, pid > 0 else { return nil }
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: daemonDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles])
+        else { return nil }
+
+        let decoder = JSONDecoder()
+        for fileURL in entries where fileURL.lastPathComponent.hasPrefix("hub_") && fileURL.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: fileURL),
+                  let info = try? decoder.decode(DaemonHubInfo.self, from: data),
+                  info.pid == pid,
+                  let token = info.csrfToken?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !token.isEmpty
+            else { continue }
+            return token
+        }
+        return nil
     }
 
     private static func isLanguageServerCommandLine(_ lowerCommand: String) -> Bool {

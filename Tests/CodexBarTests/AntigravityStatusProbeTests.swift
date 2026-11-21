@@ -243,6 +243,31 @@ struct AntigravityStatusProbeTests {
     }
 
     @Test
+    func `process scan resolves csrf token from daemon hub json by pid`() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("antigravity-daemon-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let staleHub = #"{"pid": 949, "httpsPort": 49163, "httpPort": 49164, "csrfToken": "stale-token"}"#
+        let activeHub = #"{"pid": 82171, "httpsPort": 51642, "httpPort": 51643, "csrfToken": "live-daemon-token"}"#
+        try staleHub.write(to: tempDir.appendingPathComponent("hub_49164.json"), atomically: true, encoding: .utf8)
+        try activeHub.write(to: tempDir.appendingPathComponent("hub_51643.json"), atomically: true, encoding: .utf8)
+
+        let entries = [
+            AntigravityStatusProbe.ProcessEntry(
+                pid: 82171,
+                command: "/Applications/Antigravity.app/Contents/Resources/bin/language_server --app_data_dir antigravity --read_host_bridge_token_from_stdin"),
+        ]
+
+        let results = try AntigravityStatusProbe.processInfos(fromEntries: entries, daemonDirectory: tempDir)
+
+        #expect(results.count == 1)
+        #expect(results[0].pid == 82171)
+        #expect(results[0].csrfToken == "live-daemon-token")
+    }
+
+    @Test
     func `process scan allows empty csrf only for explicit cli match`() throws {
         let output = """
           200 /Users/test/.local/bin/agy -p hello
