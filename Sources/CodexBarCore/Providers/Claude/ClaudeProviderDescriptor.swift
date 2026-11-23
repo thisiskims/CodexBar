@@ -275,7 +275,7 @@ public enum ClaudeProviderDescriptor {
     {
         if context.metric == .extraUsage { return .resolved(context.snapshot.claudeMonthlySpendWindow?.window) }
         if context.metric == .automatic {
-            let quotas = [context.snapshot.primary, context.snapshot.secondary].compactMap(\.self)
+            let quotas = [context.snapshot.secondary, context.snapshot.primary].compactMap(\.self)
                 .filter { !$0.isSyntheticPlaceholder }
             if !quotas.isEmpty { return .automaticCandidates(quotas) }
         }

@@ -82,14 +82,29 @@ struct OpenCodeUsageFetchStrategy: ProviderFetchStrategy {
     let kind: ProviderFetchKind = .web
 
     func isAvailable(_ context: ProviderFetchContext) async -> Bool {
-        guard context.settings?.opencode?.cookieSource != .off else { return false }
-        return true
+        if context.settings?.opencode?.cookieSource != .off {
+            return true
+        }
+        return OpenCodeFreeUsageReader.hasLocalSource()
     }
 
     func fetch(_ context: ProviderFetchContext) async throws -> ProviderFetchResult {
+        let now = Date()
+        let freeSummary = OpenCodeFreeUsageReader.load(now: now)
+        let freeSection = OpenCodeFreeUsageReader.detailSection(from: freeSummary, now: now)
+        let cookieSource = context.settings?.opencode?.cookieSource ?? .auto
+
+        if cookieSource == .off {
+            if let freeSection {
+                return self.makeResult(
+                    usage: Self.localOnlySnapshot(freeSection: freeSection, now: now),
+                    sourceLabel: "local")
+            }
+            throw OpenCodeSettingsError.missingCookie
+        }
+
         let workspaceOverride = context.settings?.opencode?.workspaceID
             ?? context.env["CODEXBAR_OPENCODE_WORKSPACE_ID"]
-        let cookieSource = context.settings?.opencode?.cookieSource ?? .auto
         do {
             let cookieHeader = try Self.resolveCookieHeader(context: context, allowCached: true)
             let snapshot = try await OpenCodeUsageFetcher.fetchUsage(
@@ -97,23 +112,71 @@ struct OpenCodeUsageFetchStrategy: ProviderFetchStrategy {
                 timeout: context.webTimeout,
                 workspaceIDOverride: workspaceOverride)
             return self.makeResult(
-                usage: snapshot.toUsageSnapshot(),
+                usage: Self.attachingFreeSection(freeSection, to: snapshot.toUsageSnapshot()),
                 sourceLabel: "web")
         } catch OpenCodeUsageError.invalidCredentials where cookieSource != .manual {
             #if os(macOS)
-            CookieHeaderCache.clear(provider: .opencode)
-            let cookieHeader = try Self.resolveCookieHeader(context: context, allowCached: false)
-            let snapshot = try await OpenCodeUsageFetcher.fetchUsage(
-                cookieHeader: cookieHeader,
-                timeout: context.webTimeout,
-                workspaceIDOverride: workspaceOverride)
-            return self.makeResult(
-                usage: snapshot.toUsageSnapshot(),
-                sourceLabel: "web")
+            do {
+                CookieHeaderCache.clear(provider: .opencode)
+                let cookieHeader = try Self.resolveCookieHeader(context: context, allowCached: false)
+                let snapshot = try await OpenCodeUsageFetcher.fetchUsage(
+                    cookieHeader: cookieHeader,
+                    timeout: context.webTimeout,
+                    workspaceIDOverride: workspaceOverride)
+                return self.makeResult(
+                    usage: Self.attachingFreeSection(freeSection, to: snapshot.toUsageSnapshot()),
+                    sourceLabel: "web")
+            } catch {
+                if let freeSection {
+                    return self.makeResult(
+                        usage: Self.localOnlySnapshot(freeSection: freeSection, now: now),
+                        sourceLabel: "local")
+                }
+                throw error
+            }
             #else
+            if let freeSection {
+                return self.makeResult(
+                    usage: Self.localOnlySnapshot(freeSection: freeSection, now: now),
+                    sourceLabel: "local")
+            }
             throw OpenCodeUsageError.invalidCredentials
             #endif
+        } catch {
+            if let freeSection {
+                return self.makeResult(
+                    usage: Self.localOnlySnapshot(freeSection: freeSection, now: now),
+                    sourceLabel: "local")
+            }
+            throw error
         }
+    }
+
+    private static func localOnlySnapshot(freeSection: ProviderDetailSection, now: Date) -> UsageSnapshot {
+        UsageSnapshot(
+            primary: nil,
+            secondary: nil,
+            providerCost: nil,
+            details: [freeSection],
+            updatedAt: now,
+            identity: nil)
+    }
+
+    private static func attachingFreeSection(
+        _ freeSection: ProviderDetailSection?,
+        to snapshot: UsageSnapshot) -> UsageSnapshot
+    {
+        guard let freeSection else { return snapshot }
+        return UsageSnapshot(
+            primary: snapshot.primary,
+            secondary: snapshot.secondary,
+            tertiary: snapshot.tertiary,
+            extraRateWindows: snapshot.extraRateWindows,
+            providerCost: snapshot.providerCost,
+            details: snapshot.details + [freeSection],
+            updatedAt: snapshot.updatedAt,
+            identity: snapshot.identity,
+            dataConfidence: snapshot.dataConfidence)
     }
 
     func shouldFallback(on _: Error, context _: ProviderFetchContext) -> Bool {
