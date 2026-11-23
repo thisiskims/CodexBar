@@ -451,11 +451,6 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
             selector: #selector(self.handleDebugBlinkNotification),
             name: .codexbarDebugBlinkNow,
             object: nil)
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(self.handleQuotaWarningPosted(_:)),
-            name: .codexbarQuotaWarningDidPost,
-            object: nil)
         if observeProviderConfigNotifications {
             NotificationCenter.default.addObserver(
                 self,
@@ -607,11 +602,6 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
             }
         }
         self.handleProviderConfigChange(reason: "notification:\(reason)")
-    }
-
-    @objc private func handleQuotaWarningPosted(_ notification: Notification) {
-        guard let event = notification.object as? QuotaWarningPostedEvent else { return }
-        self.startQuotaWarningFlash(provider: event.provider, postedAt: event.postedAt)
     }
 
     private func observeUpdaterChanges() {
