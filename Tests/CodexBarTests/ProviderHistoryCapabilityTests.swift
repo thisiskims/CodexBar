@@ -8,6 +8,6 @@ struct ProviderHistoryCapabilityTests {
             descriptor.history.alwaysTracksPlanUtilization ? descriptor.id : nil
         })
 
-        #expect(alwaysTracked == [.codex, .claude, .antigravity, .opencodego, .pi])
+        #expect(alwaysTracked == [.codex, .claude, .antigravity, .gemini, .opencodego, .pi])
     }
 }

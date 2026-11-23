@@ -115,6 +115,41 @@ struct GeminiWebSourceTests {
         #expect(UsagePaceText.sessionDetail(provider: .gemini, window: dailyWindow, now: now) == nil)
     }
 
+    @Test
+    func `five-hour and weekly web windows always track plan utilization history`() throws {
+        let descriptor = GeminiProviderDescriptor.descriptor
+        #expect(descriptor.history == .alwaysTracked)
+
+        let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: "GeminiWebSourceTests-history")
+        #expect(!fixture.settings.historicalTrackingEnabled)
+        #expect(fixture.store.shouldRecordPlanUtilizationHistory(for: .gemini))
+
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let snapshot = UsageSnapshot(
+            primary: .init(
+                usedPercent: 25,
+                windowMinutes: 300,
+                resetsAt: now.addingTimeInterval(2 * 3600),
+                resetDescription: nil),
+            secondary: .init(
+                usedPercent: 10,
+                windowMinutes: 10080,
+                resetsAt: now.addingTimeInterval(5 * 86400),
+                resetDescription: nil),
+            updatedAt: now)
+        let samples = fixture.store.planUtilizationSeriesSamples(
+            provider: .gemini,
+            snapshot: snapshot,
+            capturedAt: now)
+        #expect(samples.map(\.name) == [.session, .weekly])
+        #expect(samples.map(\.windowMinutes) == [300, 10080])
+
+        let pair = try #require(fixture.store.sessionEquivalentWindows(provider: .gemini, snapshot: snapshot))
+        #expect(pair.session.windowMinutes == 300)
+        #expect(pair.weekly.windowMinutes == 10080)
+        #expect(pair.historyIdentity != nil)
+    }
+
     private func context(source: ProviderSourceMode) -> ProviderFetchContext {
         let base = ProviderCutoverTestSupport.context()
         return ProviderFetchContext(
