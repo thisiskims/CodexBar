@@ -27,12 +27,24 @@ defineProvider({
         ? (value as Record<string, unknown>)
         : undefined;
     let rejected = false;
+    let sorryRedirect = false;
     for await (const session of ctx.browser.sessions(domain)) {
       const response = await ctx.http.get(url, {
         cookieSession: session.id,
         headers: { Accept: "application/json", Referer: `https://${domain}/usage` },
         retryPolicy: "transientIdempotent",
       });
+      if (response.status >= 300 && response.status < 400) {
+        const headers = object(response.headers);
+        const location = typeof headers?.location === "string" ? headers.location : "";
+        if (location.includes("/sorry/")) {
+          sorryRedirect = true;
+          continue;
+        }
+        ctx.browser.rejectCookie(domain, session);
+        rejected = true;
+        continue;
+      }
       if (
         response.status === 401 ||
         response.status === 403 ||
@@ -115,6 +127,11 @@ defineProvider({
       };
     }
     if (rejected) throw ctx.fail.authenticationExpired("Sign in again at gemini.google.com/usage.");
+    if (sorryRedirect) {
+      throw ctx.fail.rateLimited(
+        "Google redirected Gemini usage to a verification check (/sorry). Open gemini.google.com/usage in Chrome, then refresh.",
+      );
+    }
     throw ctx.fail.missingCredential(
       `Sign in at gemini.google.com/usage. Supported browsers: ${ctx.browser.supportedBrowsers}. Or paste its Cookie header.`,
     );

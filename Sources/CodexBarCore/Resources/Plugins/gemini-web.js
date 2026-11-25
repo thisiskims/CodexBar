@@ -46,12 +46,25 @@ defineProvider({
     const object = (value) =>
       value !== null && typeof value === "object" && !Array.isArray(value) ? value : undefined;
     let rejected = false;
+    let sorryRedirect = false;
     for await (const session of ctx.browser.sessions(domain)) {
       const response = await ctx.http.get(url, {
         cookieSession: session.id,
         headers: { Accept: "application/json", Referer: `https://${domain}/usage` },
         retryPolicy: "transientIdempotent",
       });
+      if (response.status >= 300 && response.status < 400) {
+        const headers = object(response.headers);
+        const location =
+          typeof _optionalChain([headers, "optionalAccess", (_) => _.location]) === "string" ? headers.location : "";
+        if (location.includes("/sorry/")) {
+          sorryRedirect = true;
+          continue;
+        }
+        ctx.browser.rejectCookie(domain, session);
+        rejected = true;
+        continue;
+      }
       if (
         response.status === 401 ||
         response.status === 403 ||
@@ -73,10 +86,10 @@ defineProvider({
       }
       if (!Array.isArray(results)) return invalid();
       const viewerEntry = results.map(object).find((entry) => {
-        const entryData = object(_optionalChain([entry, "optionalAccess", (_) => _.data]));
+        const entryData = object(_optionalChain([entry, "optionalAccess", (_2) => _2.data]));
         return entryData !== undefined && Object.prototype.hasOwnProperty.call(entryData, "viewer");
       });
-      const result = object(_optionalChain([viewerEntry, "optionalAccess", (_2) => _2.data]));
+      const result = object(_optionalChain([viewerEntry, "optionalAccess", (_3) => _3.data]));
       if (!result) return invalid();
       if (result.viewer === null) {
         ctx.browser.rejectCookie(domain, session);
@@ -86,10 +99,10 @@ defineProvider({
       const viewer = object(result.viewer);
       if (!viewer) return invalid();
       const usage = object(
-        _optionalChain([object, "call", (_3) => _3(viewer.rpcs), "optionalAccess", (_4) => _4.getUsageInfo]),
+        _optionalChain([object, "call", (_4) => _4(viewer.rpcs), "optionalAccess", (_5) => _5.getUsageInfo]),
       );
       if (!usage) {
-        const errors = Array.isArray(_optionalChain([viewerEntry, "optionalAccess", (_5) => _5.errors]))
+        const errors = Array.isArray(_optionalChain([viewerEntry, "optionalAccess", (_6) => _6.errors]))
           ? viewerEntry.errors.map(object)
           : [];
         const isUnauthenticated = errors.some((err) => {
@@ -97,17 +110,17 @@ defineProvider({
             _optionalChain([
               object,
               "call",
-              (_6) => _6(_optionalChain([err, "optionalAccess", (_7) => _7.extensions])),
+              (_7) => _7(_optionalChain([err, "optionalAccess", (_8) => _8.extensions])),
               "optionalAccess",
-              (_8) => _8.status,
+              (_9) => _9.status,
             ]),
           );
-          if (_optionalChain([status, "optionalAccess", (_9) => _9.code]) === 16) return true;
-          const details = Array.isArray(_optionalChain([status, "optionalAccess", (_10) => _10.details]))
+          if (_optionalChain([status, "optionalAccess", (_10) => _10.code]) === 16) return true;
+          const details = Array.isArray(_optionalChain([status, "optionalAccess", (_11) => _11.details]))
             ? status.details.map(object)
             : [];
           return details.some(
-            (detail) => _optionalChain([detail, "optionalAccess", (_11) => _11.reason]) === "UNAUTHENTICATED",
+            (detail) => _optionalChain([detail, "optionalAccess", (_12) => _12.reason]) === "UNAUTHENTICATED",
           );
         });
         if (isUnauthenticated) {
@@ -122,15 +135,15 @@ defineProvider({
       const window = (type, minutes) => {
         const pool = pools
           .map(object)
-          .find((pool) => _optionalChain([pool, "optionalAccess", (_12) => _12.poolType]) === type);
-        const percent = _optionalChain([pool, "optionalAccess", (_13) => _13.percentageUsed]);
+          .find((pool) => _optionalChain([pool, "optionalAccess", (_13) => _13.poolType]) === type);
+        const percent = _optionalChain([pool, "optionalAccess", (_14) => _14.percentageUsed]);
         if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0) return undefined;
         const rawReset = _optionalChain([
           object,
           "call",
-          (_14) => _14(_optionalChain([pool, "optionalAccess", (_15) => _15.gxu])),
+          (_15) => _15(_optionalChain([pool, "optionalAccess", (_16) => _16.gxu])),
           "optionalAccess",
-          (_16) => _16.windowRefreshesAt,
+          (_17) => _17.windowRefreshesAt,
         ]);
         let resetsAt;
         if (typeof rawReset === "string" && /^\d{4}-\d{2}-\d{2}T/.test(rawReset)) {
@@ -156,6 +169,11 @@ defineProvider({
       };
     }
     if (rejected) throw ctx.fail.authenticationExpired("Sign in again at gemini.google.com/usage.");
+    if (sorryRedirect) {
+      throw ctx.fail.rateLimited(
+        "Google redirected Gemini usage to a verification check (/sorry). Open gemini.google.com/usage in Chrome, then refresh.",
+      );
+    }
     throw ctx.fail.missingCredential(
       `Sign in at gemini.google.com/usage. Supported browsers: ${ctx.browser.supportedBrowsers}. Or paste its Cookie header.`,
     );
