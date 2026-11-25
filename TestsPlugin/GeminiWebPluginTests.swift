@@ -71,6 +71,19 @@ struct GeminiWebPluginTests {
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
+    func `unauthenticated getUsageInfo null allows the next browser candidate`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let unauthenticated = #"""
+        [{"data":{"viewer":{"rpcs":{"getUsageInfo":null}}},"errors":[{"extensions":{"status":{"code":16}}}]}]
+        """#
+        let fixture = Fixture([(200, unauthenticated), (200, Self.usage)])
+        let usage = try await Self.fetch(engine, fixture: fixture)
+        #expect(usage.primary?.usedPercent == 24)
+        #expect(await fixture.requests == 2)
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
     func `query drift stops browser traversal without echoing the response`(engine: ProviderPluginEngineKind) async {
         let fixture = Fixture([
             (200, #"[{"data":{},"errors":[{"message":"private-response"}]}]"#),
@@ -144,7 +157,7 @@ struct GeminiWebPluginTests {
             #expect(request.value(forHTTPHeaderField: "Cookie") == "SID=fixture-\(self.sessions)")
             let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
             #expect(query.first { $0.name == "query_signature" }?.value ==
-                "2/dWbCvkVB0X16r9NPnxifeOAAqdCqMf0xeWvau9yPy7g=")
+                "2/oee4e7iJB+YlSRDtGuxpv36rfWVddgii370z2JvCuVM=")
             let variables = try #require(query.first { $0.name == "variables" }?.value)
             let actual = try #require(JSONSerialization.jsonObject(with: Data(variables.utf8)) as? NSDictionary)
             let expected = try #require(JSONSerialization.jsonObject(with: Data(#"""

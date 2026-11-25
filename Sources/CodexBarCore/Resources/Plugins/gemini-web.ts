@@ -11,7 +11,7 @@ defineProvider({
     if (ctx.browser.availability(domain) === "off")
       throw ctx.fail.missingCredential("Gemini app cookies are disabled.");
     // UsagePageQuery from the public UsagePageSurface bundle; this is separate from Gemini CLI quotas.
-    const signature = "2/dWbCvkVB0X16r9NPnxifeOAAqdCqMf0xeWvau9yPy7g=";
+    const signature = "2/oee4e7iJB+YlSRDtGuxpv36rfWVddgii370z2JvCuVM=";
     const variables = JSON.stringify({
       g1Request: { entrypoints: ["GEMINI_USAGE_SETTINGS_UPGRADE_BANNER"] },
       workspaceRequest: { recommendationsForSurfaceRequests: [] },
@@ -53,9 +53,13 @@ defineProvider({
         return invalid();
       }
       if (!Array.isArray(results)) return invalid();
-      const data = results.map((result) => object(object(result)?.data)).filter((value) => value !== undefined);
-      if (data.length === 0) return invalid();
-      const result = data.find((value) => Object.prototype.hasOwnProperty.call(value, "viewer"));
+      const viewerEntry = results
+        .map(object)
+        .find((entry) => {
+          const entryData = object(entry?.data);
+          return entryData !== undefined && Object.prototype.hasOwnProperty.call(entryData, "viewer");
+        });
+      const result = object(viewerEntry?.data);
       if (!result) return invalid();
       if (result.viewer === null) {
         ctx.browser.rejectCookie(domain, session);
@@ -65,7 +69,22 @@ defineProvider({
       const viewer = object(result.viewer);
       if (!viewer) return invalid();
       const usage = object(object(viewer.rpcs)?.getUsageInfo);
-      if (!usage || !Array.isArray(usage.pools)) return invalid();
+      if (!usage) {
+        const errors = Array.isArray(viewerEntry?.errors) ? viewerEntry.errors.map(object) : [];
+        const isUnauthenticated = errors.some((err) => {
+          const status = object(object(err?.extensions)?.status);
+          if (status?.code === 16) return true;
+          const details = Array.isArray(status?.details) ? status.details.map(object) : [];
+          return details.some((detail) => detail?.reason === "UNAUTHENTICATED");
+        });
+        if (isUnauthenticated) {
+          ctx.browser.rejectCookie(domain, session);
+          rejected = true;
+          continue;
+        }
+        return invalid();
+      }
+      if (!Array.isArray(usage.pools)) return invalid();
       const pools = usage.pools;
       const window = (type: string, minutes: number) => {
         const pool = pools.map(object).find((pool) => pool?.poolType === type);

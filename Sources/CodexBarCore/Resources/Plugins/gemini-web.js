@@ -32,7 +32,7 @@ defineProvider({
     if (ctx.browser.availability(domain) === "off")
       throw ctx.fail.missingCredential("Gemini app cookies are disabled.");
     // UsagePageQuery from the public UsagePageSurface bundle; this is separate from Gemini CLI quotas.
-    const signature = "2/dWbCvkVB0X16r9NPnxifeOAAqdCqMf0xeWvau9yPy7g=";
+    const signature = "2/oee4e7iJB+YlSRDtGuxpv36rfWVddgii370z2JvCuVM=";
     const variables = JSON.stringify({
       g1Request: { entrypoints: ["GEMINI_USAGE_SETTINGS_UPGRADE_BANNER"] },
       workspaceRequest: { recommendationsForSurfaceRequests: [] },
@@ -72,11 +72,11 @@ defineProvider({
         return invalid();
       }
       if (!Array.isArray(results)) return invalid();
-      const data = results
-        .map((result) => object(_optionalChain([object, "call", (_) => _(result), "optionalAccess", (_2) => _2.data])))
-        .filter((value) => value !== undefined);
-      if (data.length === 0) return invalid();
-      const result = data.find((value) => Object.prototype.hasOwnProperty.call(value, "viewer"));
+      const viewerEntry = results.map(object).find((entry) => {
+        const entryData = object(_optionalChain([entry, "optionalAccess", (_) => _.data]));
+        return entryData !== undefined && Object.prototype.hasOwnProperty.call(entryData, "viewer");
+      });
+      const result = object(_optionalChain([viewerEntry, "optionalAccess", (_2) => _2.data]));
       if (!result) return invalid();
       if (result.viewer === null) {
         ctx.browser.rejectCookie(domain, session);
@@ -88,20 +88,49 @@ defineProvider({
       const usage = object(
         _optionalChain([object, "call", (_3) => _3(viewer.rpcs), "optionalAccess", (_4) => _4.getUsageInfo]),
       );
-      if (!usage || !Array.isArray(usage.pools)) return invalid();
+      if (!usage) {
+        const errors = Array.isArray(_optionalChain([viewerEntry, "optionalAccess", (_5) => _5.errors]))
+          ? viewerEntry.errors.map(object)
+          : [];
+        const isUnauthenticated = errors.some((err) => {
+          const status = object(
+            _optionalChain([
+              object,
+              "call",
+              (_6) => _6(_optionalChain([err, "optionalAccess", (_7) => _7.extensions])),
+              "optionalAccess",
+              (_8) => _8.status,
+            ]),
+          );
+          if (_optionalChain([status, "optionalAccess", (_9) => _9.code]) === 16) return true;
+          const details = Array.isArray(_optionalChain([status, "optionalAccess", (_10) => _10.details]))
+            ? status.details.map(object)
+            : [];
+          return details.some(
+            (detail) => _optionalChain([detail, "optionalAccess", (_11) => _11.reason]) === "UNAUTHENTICATED",
+          );
+        });
+        if (isUnauthenticated) {
+          ctx.browser.rejectCookie(domain, session);
+          rejected = true;
+          continue;
+        }
+        return invalid();
+      }
+      if (!Array.isArray(usage.pools)) return invalid();
       const pools = usage.pools;
       const window = (type, minutes) => {
         const pool = pools
           .map(object)
-          .find((pool) => _optionalChain([pool, "optionalAccess", (_5) => _5.poolType]) === type);
-        const percent = _optionalChain([pool, "optionalAccess", (_6) => _6.percentageUsed]);
+          .find((pool) => _optionalChain([pool, "optionalAccess", (_12) => _12.poolType]) === type);
+        const percent = _optionalChain([pool, "optionalAccess", (_13) => _13.percentageUsed]);
         if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0) return undefined;
         const rawReset = _optionalChain([
           object,
           "call",
-          (_7) => _7(_optionalChain([pool, "optionalAccess", (_8) => _8.gxu])),
+          (_14) => _14(_optionalChain([pool, "optionalAccess", (_15) => _15.gxu])),
           "optionalAccess",
-          (_9) => _9.windowRefreshesAt,
+          (_16) => _16.windowRefreshesAt,
         ]);
         let resetsAt;
         if (typeof rawReset === "string" && /^\d{4}-\d{2}-\d{2}T/.test(rawReset)) {
