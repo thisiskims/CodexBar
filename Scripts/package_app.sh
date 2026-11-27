@@ -583,8 +583,12 @@ install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/Mac
 # Re-sign Sparkle and all nested components with the selected package identity.
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 if [[ "$SIGNING_MODE" == "adhoc" ]]; then
-  CODESIGN_ID="-"
+  # A stable local identity keeps the designated requirement (and macOS TCC/Keychain grants) across builds.
+  CODESIGN_ID="${CODEXBAR_ADHOC_IDENTITY:--}"
   CODESIGN_ARGS=(--force --sign "$CODESIGN_ID")
+  if [[ -n "${CODEXBAR_ADHOC_KEYCHAIN:-}" ]]; then
+    CODESIGN_ARGS+=(--keychain "$CODEXBAR_ADHOC_KEYCHAIN")
+  fi
 elif [[ "$ALLOW_LLDB" == "1" ]]; then
   CODESIGN_ID="-"
   CODESIGN_ARGS=(--force --sign "$CODESIGN_ID")
