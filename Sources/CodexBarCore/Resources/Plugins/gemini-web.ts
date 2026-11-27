@@ -27,7 +27,7 @@ defineProvider({
         ? (value as Record<string, unknown>)
         : undefined;
     let rejected = false;
-    let sorryRedirect = false;
+    const sorrySources: string[] = [];
     for await (const session of ctx.browser.sessions(domain)) {
       const response = await ctx.http.get(url, {
         cookieSession: session.id,
@@ -38,7 +38,7 @@ defineProvider({
         const headers = object(response.headers);
         const location = typeof headers?.location === "string" ? headers.location : "";
         if (location.includes("/sorry/")) {
-          sorryRedirect = true;
+          if (!sorrySources.includes(session.source)) sorrySources.push(session.source);
           continue;
         }
         ctx.browser.rejectCookie(domain, session);
@@ -127,9 +127,10 @@ defineProvider({
       };
     }
     if (rejected) throw ctx.fail.authenticationExpired("Sign in again at gemini.google.com/usage.");
-    if (sorryRedirect) {
+    if (sorrySources.length > 0) {
+      // Name the cookie source that hit /sorry: background refreshes may only reach Safari, not Chrome.
       throw ctx.fail.rateLimited(
-        "Google redirected Gemini usage to a verification check (/sorry). Open gemini.google.com/usage in Chrome, then refresh.",
+        `Google redirected Gemini usage to a verification check (/sorry). Open gemini.google.com/usage in ${sorrySources.join(" and ")}, then refresh.`,
       );
     }
     throw ctx.fail.missingCredential(
