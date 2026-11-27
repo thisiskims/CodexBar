@@ -1,7 +1,17 @@
 import Foundation
+import SweetCookieKit
 
 public enum GeminiProviderDescriptor {
     public static let descriptor: ProviderDescriptor = Self.makeDescriptor()
+
+    /// Google can send a stale Safari session to its /sorry check; try Chrome's session first.
+    private static var browserCookieOrder: BrowserCookieImportOrder? {
+        #if os(macOS)
+        [.chrome] + Browser.defaultImportOrder.filter { $0 != .chrome }
+        #else
+        nil
+        #endif
+    }
 
     static func makeDescriptor() -> ProviderDescriptor {
         ProviderDescriptor(
@@ -29,7 +39,7 @@ public enum GeminiProviderDescriptor {
                 ],
                 debugLogUnavailableMessage: "Gemini debug log not yet implemented",
                 debugPane: ProviderDebugPaneCapabilities(errorSimulationOrder: 2),
-                browserCookieOrder: ProviderBrowserCookieDefaults.defaultImportOrder,
+                browserCookieOrder: self.browserCookieOrder,
                 dashboardURL: "https://gemini.google.com",
                 changelogURL: "https://github.com/google-gemini/gemini-cli/releases",
                 statusPageURL: nil,

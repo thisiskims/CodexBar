@@ -19,7 +19,10 @@ struct GeminiWebSourceTests {
         let web = await descriptor.fetchPlan.pipeline.resolveStrategies(self.context(source: .web))
         #expect(web.map(\.id) == ["gemini.web"])
         #expect(web.first.map { $0 is ScriptFetchStrategy } == true)
-        #expect(descriptor.metadata.browserCookieOrder == ProviderBrowserCookieDefaults.defaultImportOrder)
+        #if os(macOS)
+        let defaultOrder = ProviderBrowserCookieDefaults.defaultImportOrder ?? []
+        #expect(descriptor.metadata.browserCookieOrder == [.chrome] + defaultOrder.filter { $0 != .chrome })
+        #endif
     }
 
     @Test
